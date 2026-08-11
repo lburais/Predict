@@ -102,7 +102,7 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def build_segments(points):
-    """Construit la liste des segments avec distance (m), pente (%),
+    """Construit la liste des segments avec distance (m), pente (%)
     et duree (s) si les horodatages sont presents."""
     segments = []
     for p1, p2 in zip(points, points[1:]):
@@ -216,7 +216,8 @@ def compute_weighted_average_power(groups, weight, min_slope=0.0, scx=0.40, mva=
 
 
 def compute_speed_comparison(groups, power, cyclist, bike=9.0, accessories=3.0, min_slope=0.0, scx=0.40, mva=1.2, kf=0.01, chainrings=None, cogs=None, rpm_min=60.0, rpm_max=80.0, max_cog=None):
-    """Retourne les vitesses GPX et estimees par groupe, ainsi que les temps totaux."""
+    """Retourne les vitesses GPX et estimees par groupe, ainsi que les temps totaux.
+    Si un groupe n'a pas d'horodatage, la vitesse GPX et le delta sont omis."""
     results = []
     total_dist = 0.0
     total_gpx_time = 0.0
@@ -229,18 +230,18 @@ def compute_speed_comparison(groups, power, cyclist, bike=9.0, accessories=3.0, 
     for grp in groups:
         dt = grp.get('dt')
         dist = grp.get('dist', 0.0)
-        if dt is None or dt <= 0 or dist <= 0:
+        if dist <= 0:
             continue
 
-        gpx_speed = dist / dt
         estimated_speed = vitesse(power, weight, grp['pente'], scx, mva, kf)
-        delta = estimated_speed - gpx_speed
-        results.append({
+        estimated_duration = (dist / estimated_speed) if estimated_speed > 0 else 0.0
+        result = {
             'dist': dist,
             'pente': grp['pente'],
-            'gpx_speed': gpx_speed,
             'estimated_speed': estimated_speed,
-            'delta': delta,
+            'estimated_duration': estimated_duration,
+            'gpx_speed': None,
+            'delta': None,
             'gear': recommend_gear(
                 estimated_speed,
                 chainrings=chainrings,
@@ -249,17 +250,32 @@ def compute_speed_comparison(groups, power, cyclist, bike=9.0, accessories=3.0, 
                 rpm_max=rpm_max,
                 max_cog=max_cog,
             ),
-        })
-        total_dist += dist
-        total_gpx_time += dt
-        if estimated_speed > 0:
-            total_est_time += dist / estimated_speed
+        }
 
-        if grp.get('pente', 0.0) >= min_slope:
-            filtered_dist += dist
-            filtered_gpx_time += dt
+        if dt is not None and dt > 0:
+            gpx_speed = dist / dt
+            result['gpx_speed'] = gpx_speed
+            result['delta'] = estimated_speed - gpx_speed
+            total_gpx_time += dt
+            total_dist += dist
             if estimated_speed > 0:
-                filtered_est_time += dist / estimated_speed
+                total_est_time += dist / estimated_speed
+
+            if grp.get('pente', 0.0) >= min_slope:
+                filtered_dist += dist
+                filtered_gpx_time += dt
+                if estimated_speed > 0:
+                    filtered_est_time += dist / estimated_speed
+        else:
+            total_dist += dist
+            if estimated_speed > 0:
+                total_est_time += dist / estimated_speed
+            if grp.get('pente', 0.0) >= min_slope:
+                filtered_dist += dist
+                if estimated_speed > 0:
+                    filtered_est_time += dist / estimated_speed
+
+        results.append(result)
 
     return results, total_dist, total_gpx_time, total_est_time, filtered_dist, filtered_gpx_time, filtered_est_time
 
@@ -269,6 +285,14 @@ def format_gear_label(gear):
     if not gear:
         return ''
     return f"{gear.get('chainring', '')} x {gear.get('cog', '')}"
+
+
+def format_duration_hms(total_seconds):
+    """Formate une duree en h mn s (ex. 1h 02mn 03s)."""
+    seconds = max(int(total_seconds), 0)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes:02d}mn {seconds:02d}s"
 
 
 def recommend_gear(speed_mps, chainrings=None, cogs=None, rpm_min=60.0, rpm_max=80.0, max_cog=None):
@@ -408,28 +432,39 @@ def export_results_pdf(output_path, rows, title, chart_rows=None, summary=None):
         elements.append(Spacer(1, 12))
 
     if 'vitesse' in title.lower():
-        table_data = [['group', 'dist(km)', 'cum_dist(km)', 'pente(%)', 'GPX(m/s)', 'Estimated(m/s)', 'delta(m/s)', 'gear', 'cadence(rpm)']]
+        table_data = [['group', 'dist(km)', 'cum_dist(km)', 'pente(%)', 'GPX(km/h)', 'Estimated(km/h)', 'delta(km/h)', 'gear', 'cadence(rpm)']]
         cumulative_distance = 0.0
         for row in rows:
             cumulative_distance += row.get('dist', 0.0)
             gear = row.get('gear') or {}
+            gpx_speed = row.get('gpx_speed')
+            if gpx_speed is not None:
+                gpx_speed_kmh = gpx_speed * 3.6
+            else:
+                gpx_speed_kmh = None
+            estimated_speed_kmh = row.get('estimated_speed', 0.0) * 3.6
+            delta = row.get('delta')
+            if delta is not None:
+                delta_kmh = delta * 3.6
+            else:
+                delta_kmh = None
             table_data.append([
                 row['group'],
                 f"{row['dist']/1000.0:.3f}",
                 f"{cumulative_distance/1000.0:.3f}",
                 f"{row['pente']:.2f}",
-                f"{row.get('gpx_speed', 0.0):.2f}",
-                f"{row.get('estimated_speed', 0.0):.2f}",
-                f"{row.get('delta', 0.0):.2f}",
+                '-' if gpx_speed_kmh is None else f"{gpx_speed_kmh:.2f}",
+                f"{estimated_speed_kmh:.2f}",
+                '-' if delta_kmh is None else f"{delta_kmh:.2f}",
                 format_gear_label(gear),
                 f"{gear.get('cadence_rpm', 0.0):.0f}",
             ])
     else:
-        table_data = [['group', 'dist(km)', 'cum_dist(km)', 'pente(%)', 'V(m/s)', 'V(km/h)', 'P(W)', 'gear', 'cadence(rpm)']]
+        table_data = [['group', 'dist(km)', 'cum_dist(km)', 'pente(%)', 'V(km/h)', 'P(W)', 'gear', 'cadence(rpm)']]
         cumulative_distance = 0.0
         for row in rows:
             cumulative_distance += row.get('dist', 0.0)
-            speed = row.get('speed', row.get('estimated_speed', 0.0))
+            speed = row.get('speed', row.get('estimated_speed', 0.0)) * 3.6
             power = max(row.get('power', row.get('estimated_speed', 0.0)), 0.0)
             gear = row.get('gear') or {}
             table_data.append([
@@ -438,7 +473,6 @@ def export_results_pdf(output_path, rows, title, chart_rows=None, summary=None):
                 f"{cumulative_distance/1000.0:.3f}",
                 f"{row['pente']:.2f}",
                 f"{speed:.2f}",
-                f"{speed * 3.6:.2f}",
                 f"{power:.1f}",
                 format_gear_label(gear),
                 f"{gear.get('cadence_rpm', 0.0):.0f}",
@@ -457,7 +491,7 @@ def export_results_pdf(output_path, rows, title, chart_rows=None, summary=None):
 
 
 def export_speed_chart(output_path, rows, fmt='png'):
-    """Exporte un graphique simple de la puissance par distance si matplotlib est disponible."""
+    """Exporte un graphique de la vitesse par distance cumulative si matplotlib est disponible."""
     if plt is None:
         raise RuntimeError("matplotlib n'est pas disponible")
 
@@ -467,22 +501,22 @@ def export_speed_chart(output_path, rows, fmt='png'):
     for row in rows:
         cumulative_distance += row.get('dist', 0.0)
         x.append(cumulative_distance)
-        if 'power' in row:
-            y.append(max(row['power'], 0.0))
-        elif 'estimated_speed' in row:
-            y.append(row['estimated_speed'])
+        if 'estimated_speed' in row:
+            y.append(row['estimated_speed'] * 3.6)
         elif 'speed' in row:
-            y.append(row['speed'])
+            y.append(row['speed'] * 3.6)
         elif 'gpx_speed' in row:
-            y.append(row['gpx_speed'])
+            y.append(row['gpx_speed'] * 3.6)
+        elif 'power' in row:
+            y.append(0.0)
         else:
             y.append(0.0)
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(x, y, marker='o', linewidth=1.5)
-    ax.set_title('Puissance par distance')
-    ax.set_xlabel('Distance cumulative (km)')
-    ax.set_ylabel('Puissance (W)')
+    ax.set_title('Vitesse par distance cumulative')
+    ax.set_xlabel('Distance cumulative (m)')
+    ax.set_ylabel('Vitesse (km/h)')
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     if hasattr(output_path, 'write'):
@@ -547,6 +581,22 @@ def mode_power(args):
     )
     print(f"\nPuissance moyenne (ponderee par le temps sur pente >= {args.min_slope:.2f}%) : {average_power:.1f} W sur {n} groupes")
 
+    summary_lines = [
+        "Parametres",
+        f"Cycliste : {args.cyclist if args.cyclist is not None else 70.0:.1f} kg",
+        f"Velo : {args.bike:.1f} kg",
+        f"Accessoires : {args.accessories:.1f} kg",
+        f"Distance cible : {args.group_distance:.0f} m",
+        f"Pente minimale : {args.min_slope:.2f}%",
+        f"Plateaux : {', '.join(str(value) for value in args.chainrings)}",
+        f"Pignons : {', '.join(str(value) for value in args.cogs)}",
+        f"Cadence : {args.rpm_range[0]:.0f}-{args.rpm_range[1]:.0f} rpm",
+        f"Pignon max pour grand plateau : {args.max_cog if args.max_cog is not None else 'non defini'}",
+        f"SCx : {args.scx:.2f} | mva : {args.mva:.2f} | kf : {args.kf:.2f}",
+    ]
+    for line in summary_lines:
+        print(line)
+
     if args.gpx:
         output_path = build_pdf_output_path(args.gpx)
         output_dir = os.path.dirname(output_path) or '.'
@@ -558,6 +608,7 @@ def mode_power(args):
                 'Tableau puissance par distance',
                 chart_rows=rows,
                 summary=[
+                    *summary_lines,
                     f"Distance totale : {cumulative_distance/1000.0:.3f} km",
                     f"Nombre de groupes : {n}",
                     f"Puissance moyenne : {average_power:.1f} W",
@@ -591,33 +642,67 @@ def mode_speed(args):
     )
 
     cumulative_distance = 0.0
-    print(f"{'group':>8} {'dist(km)':>11} {'cum_dist(km)':>13} {'pente(%)':>11} {'GPX(m/s)':>11} {'Estimated(m/s)':>16} {'delta(m/s)':>12} {'gear':>12} {'cadence(rpm)':>13}")
+    print(f"{'group':>8} {'dist(km)':>11} {'cum_dist(km)':>13} {'pente(%)':>11} {'GPX(km/h)':>12} {'Estimated(km/h)':>17} {'delta(km/h)':>13} {'gear':>12} {'cadence(rpm)':>13}")
     for i, res in enumerate(results, 1):
         cumulative_distance += res['dist']
         gear = res.get('gear') or {}
+        gpx_speed = res.get('gpx_speed')
+        delta = res.get('delta')
+        gpx_value = '-' if gpx_speed is None else f"{gpx_speed * 3.6:8.2f}"
+        delta_value = '-' if delta is None else f"{delta * 3.6:9.2f}"
         print(
-            f"{i:8d} {res['dist']/1000.0:10.3f}km {cumulative_distance/1000.0:12.3f}km {res['pente']:10.2f}% {res['gpx_speed']:10.2f}m/s {res['estimated_speed']:14.2f}m/s {res['delta']:10.2f}m/s {format_gear_label(gear):>12} {gear.get('cadence_rpm', 0.0):>10.0f}"
+            f"{i:8d} {res['dist']/1000.0:10.3f}km {cumulative_distance/1000.0:12.3f}km {res['pente']:10.2f}% {gpx_value:>10} {res['estimated_speed'] * 3.6:14.2f} {delta_value:>10} {format_gear_label(gear):>12} {gear.get('cadence_rpm', 0.0):>10.0f}"
         )
 
     if total_est_time > 0:
-        gpx_avg = total_dist / total_gpx_time if total_gpx_time > 0 else 0.0
         est_avg = total_dist / total_est_time if total_est_time > 0 else 0.0
-        print(f"\nVitesse moyenne GPX : {gpx_avg:.2f} m/s ({gpx_avg * 3.6:.2f} km/h)")
-        print(f"Vitesse moyenne estimee : {est_avg:.2f} m/s ({est_avg * 3.6:.2f} km/h)")
-        print(f"Difference moyenne : {est_avg - gpx_avg:.2f} m/s ({(est_avg - gpx_avg) * 3.6:.2f} km/h)")
+        print(f"\nVitesse moyenne estimee : {est_avg * 3.6:.2f} km/h")
+        print(f"Duree estimee totale : {format_duration_hms(total_est_time)}")
+        if total_gpx_time > 0:
+            gpx_avg = total_dist / total_gpx_time if total_gpx_time > 0 else None
+            print(f"Vitesse moyenne GPX : {gpx_avg * 3.6:.2f} km/h")
+            print(f"Difference moyenne : {(est_avg - gpx_avg) * 3.6:.2f} km/h")
 
     if filtered_est_time > 0:
-        filtered_gpx_avg = filtered_dist / filtered_gpx_time if filtered_gpx_time > 0 else 0.0
         filtered_est_avg = filtered_dist / filtered_est_time if filtered_est_time > 0 else 0.0
-        print(f"\nVitesse moyenne GPX sur pente >= {args.min_slope:.2f}% : {filtered_gpx_avg:.2f} m/s ({filtered_gpx_avg * 3.6:.2f} km/h)")
-        print(f"Vitesse moyenne estimee sur pente >= {args.min_slope:.2f}% : {filtered_est_avg:.2f} m/s ({filtered_est_avg * 3.6:.2f} km/h)")
-        print(f"Difference moyenne sur pente >= {args.min_slope:.2f}% : {filtered_est_avg - filtered_gpx_avg:.2f} m/s ({(filtered_est_avg - filtered_gpx_avg) * 3.6:.2f} km/h)")
+        print(f"\nVitesse moyenne estimee sur pente >= {args.min_slope:.2f}% : {filtered_est_avg * 3.6:.2f} km/h")
+        if filtered_gpx_time > 0:
+            filtered_gpx_avg = filtered_dist / filtered_gpx_time if filtered_gpx_time > 0 else None
+            print(f"Vitesse moyenne GPX sur pente >= {args.min_slope:.2f}% : {filtered_gpx_avg * 3.6:.2f} km/h")
+            print(f"Difference moyenne sur pente >= {args.min_slope:.2f}% : {(filtered_est_avg - filtered_gpx_avg) * 3.6:.2f} km/h")
+
+    summary_lines = [
+        "Parametres",
+        f"Cycliste : {args.cyclist if args.cyclist is not None else 70.0:.1f} kg",
+        f"Velo : {args.bike:.1f} kg",
+        f"Accessoires : {args.accessories:.1f} kg",
+        f"Puissance : {args.power:.1f} W",
+        f"Distance cible : {args.group_distance:.0f} m",
+        f"Pente minimale : {args.min_slope:.2f}%",
+        f"Plateaux : {', '.join(str(value) for value in args.chainrings)}",
+        f"Pignons : {', '.join(str(value) for value in args.cogs)}",
+        f"Cadence : {args.rpm_range[0]:.0f}-{args.rpm_range[1]:.0f} rpm",
+        f"Pignon max pour grand plateau : {args.max_cog if args.max_cog is not None else 'non defini'}",
+        f"SCx : {args.scx:.2f} | mva : {args.mva:.2f} | kf : {args.kf:.2f}",
+    ]
+    for line in summary_lines:
+        print(line)
 
     if args.gpx:
         output_path = build_pdf_output_path(args.gpx)
         output_dir = os.path.dirname(output_path) or '.'
         os.makedirs(output_dir, exist_ok=True)
         try:
+            summary_items = [
+                *summary_lines,
+                f"Distance totale : {total_dist/1000.0:.3f} km",
+                f"Duree estimee totale : {format_duration_hms(total_est_time)}",
+            ]
+            if total_gpx_time > 0:
+                summary_items.extend([
+                    f"Temps GPX : {total_gpx_time:.1f} s",
+                    f"Vitesse moyenne GPX : {((total_dist / total_gpx_time) if total_gpx_time > 0 else 0.0) * 3.6:.2f} km/h",
+                ])
             export_results_pdf(
                 output_path,
                 [
@@ -625,18 +710,16 @@ def mode_speed(args):
                         'group': i,
                         'dist': res['dist'],
                         'pente': res['pente'],
-                        'speed': res['gpx_speed'],
-                        'power': res['estimated_speed'],
+                        'gpx_speed': res.get('gpx_speed'),
+                        'estimated_speed': res['estimated_speed'],
+                        'estimated_duration': res.get('estimated_duration', 0.0),
+                        'delta': res.get('delta'),
                         'gear': res.get('gear'),
                     } for i, res in enumerate(results, 1)
                 ],
                 'Tableau vitesse par groupe',
-                chart_rows=[{'estimated_speed': res['estimated_speed']} for res in results],
-                summary=[
-                    f"Distance totale : {total_dist/1000.0:.3f} km",
-                    f"Temps GPX : {total_gpx_time:.1f} s",
-                    f"Vitesse moyenne GPX : {((total_dist / total_gpx_time) if total_gpx_time > 0 else 0.0):.2f} m/s",
-                ],
+                chart_rows=[{'dist': res['dist'], 'estimated_speed': res['estimated_speed'], 'gpx_speed': res.get('gpx_speed')} for res in results],
+                summary=summary_items,
             )
             print(f"PDF exporte : {output_path}")
         except RuntimeError as exc:

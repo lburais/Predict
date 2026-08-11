@@ -20,7 +20,6 @@
             "args": [
                 "power",
                 "--gpx", "sortie.gpx",
-                "--pdf-output", "sortie.pdf",
                 "--group-distance", "1000",
                 "--cyclist", "90",
             ]
@@ -33,8 +32,7 @@
             "console": "integratedTerminal",
             "args": [
                 "power",
-                "--gpx", "sortie.gpx",
-                "--pdf-output", "sortie.pdf",
+                "--gpx", "08aug26.gpx",
                 "--cyclist", "90",
             ]
         },
@@ -46,8 +44,7 @@
             "console": "integratedTerminal",
             "args": [
                 "speed",
-                "--gpx", "sortie.gpx",
-                "--pdf-output", "sortie.pdf",
+                "--gpx", "08aug26.gpx",
                 "--cyclist", "90",
                 "--power", "185",
             ]

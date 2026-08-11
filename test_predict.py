@@ -1,6 +1,7 @@
 import io
 import os
 import tempfile
+import types
 import unittest
 from contextlib import redirect_stdout
 from unittest import mock
@@ -8,12 +9,14 @@ from unittest import mock
 from predict import (
     build_pdf_output_path,
     build_segment_groups,
+    build_segments,
     compute_speed_comparison,
     compute_weighted_average_power,
     export_results_pdf,
     export_speed_chart,
     format_gear_label,
     main,
+    mode_speed,
     recommend_gear,
     total_weight,
 )
@@ -44,6 +47,40 @@ class BuildSegmentGroupsTests(unittest.TestCase):
         average_power = compute_weighted_average_power(groups, weight=total_mass, min_slope=0.0)
 
         self.assertAlmostEqual(average_power, 54.4, places=1)
+
+    def test_build_segments_keeps_missing_time_as_none(self):
+        points = [
+            {'lat': 0.0, 'lon': 0.0, 'ele': 0.0, 'time': None},
+            {'lat': 0.0, 'lon': 0.01, 'ele': 0.0, 'time': None},
+        ]
+
+        linear_segments = build_segments(points)
+        self.assertEqual(len(linear_segments), 1)
+        self.assertIsNone(linear_segments[0]['dt'])
+
+    def test_speed_comparison_omits_gpx_speed_and_delta_when_no_time_is_available(self):
+        groups = [
+            {'dist': 100.0, 'pente': 0.0, 'dt': None},
+        ]
+
+        results, total_dist, total_gpx_time, total_est_time, filtered_dist, filtered_gpx_time, filtered_est_time = compute_speed_comparison(
+            groups,
+            power=200.0,
+            cyclist=80.0,
+            bike=9.0,
+            accessories=3.0,
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0]['gpx_speed'])
+        self.assertIsNone(results[0]['delta'])
+        self.assertEqual(total_dist, 100.0)
+        self.assertEqual(total_gpx_time, 0.0)
+        self.assertEqual(filtered_dist, 100.0)
+        self.assertEqual(filtered_gpx_time, 0.0)
+        self.assertGreater(results[0]['estimated_speed'], 0.0)
+        self.assertGreater(total_est_time, 0.0)
+        self.assertGreater(filtered_est_time, 0.0)
 
     def test_main_prints_help_when_no_mode_is_given(self):
         stdout = io.StringIO()
@@ -115,7 +152,7 @@ class BuildSegmentGroupsTests(unittest.TestCase):
             cogs=[11, 12, 13, 14, 15, 17, 19, 21, 23, 26],
             rpm_min=60.0,
             rpm_max=80.0,
-            max_cog_for_biggest_chainring=21,
+            max_cog=21,
         )
 
         self.assertLessEqual(recommendation['cog'], 21)
@@ -149,6 +186,49 @@ class BuildSegmentGroupsTests(unittest.TestCase):
             self.assertTrue(os.path.exists(pdf_path))
             self.assertFalse(os.path.exists(chart_path))
             self.assertGreater(os.path.getsize(pdf_path), 0)
+
+    def test_mode_speed_omits_gpx_metrics_in_pdf_when_no_timestamps_exist(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            gpx_path = os.path.join(tmp_dir, 'route.gpx')
+            with open(gpx_path, 'w', encoding='utf-8') as handle:
+                handle.write(
+                    '''<?xml version="1.0" encoding="UTF-8"?>
+                    <gpx version="1.1" creator="test">
+                      <trk>
+                        <trkseg>
+                          <trkpt lat="48.0" lon="2.0"><ele>100</ele></trkpt>
+                          <trkpt lat="48.0001" lon="2.0"><ele>101</ele></trkpt>
+                        </trkseg>
+                      </trk>
+                    </gpx>
+                    '''
+                )
+
+            args = types.SimpleNamespace(
+                gpx=gpx_path,
+                cyclist=80.0,
+                bike=9.0,
+                accessories=3.0,
+                power=200.0,
+                group_distance=100.0,
+                min_slope=-0.5,
+                scx=0.40,
+                mva=1.2,
+                kf=0.01,
+                chainrings=[50, 34],
+                cogs=[11, 12, 13, 14, 15, 17, 19, 21, 23, 26],
+                rpm_range=(60.0, 80.0),
+                max_cog=None,
+            )
+
+            with redirect_stdout(io.StringIO()):
+                mode_speed(args)
+
+            pdf_path = os.path.join(tmp_dir, 'route.pdf')
+            self.assertTrue(os.path.exists(pdf_path))
+            pdf_text = open(pdf_path, 'rb').read().decode('latin-1', 'ignore')
+            self.assertNotIn('Temps GPX', pdf_text)
+            self.assertNotIn('Vitesse moyenne GPX', pdf_text)
 
 
 if __name__ == '__main__':
