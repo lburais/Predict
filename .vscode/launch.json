@@ -1,0 +1,56 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Predict",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "Predict (power km)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+            "args": [
+                "power",
+                "--gpx", "sortie.gpx",
+                "--pdf-output", "sortie.pdf",
+                "--group-distance", "1000",
+                "--cyclist", "90",
+            ]
+        },
+        {
+            "name": "Predict (power)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+            "args": [
+                "power",
+                "--gpx", "sortie.gpx",
+                "--pdf-output", "sortie.pdf",
+                "--cyclist", "90",
+            ]
+        },
+        {
+            "name": "Predict (speed)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+            "args": [
+                "speed",
+                "--gpx", "sortie.gpx",
+                "--pdf-output", "sortie.pdf",
+                "--cyclist", "90",
+                "--power", "185",
+            ]
+        },
+    ]
+}
