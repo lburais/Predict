@@ -12,6 +12,17 @@
             "console": "integratedTerminal",
         },
         {
+            "name": "Predict (all)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predict.py",
+            "console": "integratedTerminal",
+            "args": [
+                "power",
+                "--cyclist", "90",
+            ]
+        },
+        {
             "name": "Predict (power km)",
             "type": "debugpy",
             "request": "launch",
@@ -32,7 +43,7 @@
             "console": "integratedTerminal",
             "args": [
                 "power",
-                "--gpx", "08aug26.gpx",
+                "--gpx", "12aug26s.gpx",
                 "--cyclist", "90",
             ]
         },

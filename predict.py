@@ -398,14 +398,29 @@ def vitesse(w_cible, poids_kg, pente_pct, scx, mva, kf):
 # Modes
 # --------------------------------------------------------------------------
 
-def build_pdf_output_path(gpx_path):
+def iter_gpx_files(folder=None):
+    """Retourne la liste ordonnee des fichiers GPX d'un dossier."""
+    folder = folder or '.'
+    if os.path.isfile(folder):
+        return [folder] if folder.lower().endswith('.gpx') else []
+    if not os.path.isdir(folder):
+        return []
+    return sorted(
+        os.path.join(folder, name)
+        for name in os.listdir(folder)
+        if name.lower().endswith('.gpx')
+    )
+
+
+def build_pdf_output_path(gpx_path, mode=None):
     """Construit le chemin PDF par defaut a partir du chemin GPX."""
     if not gpx_path:
         return None
     base, ext = os.path.splitext(gpx_path)
+    suffix = f" ({mode})" if mode else ""
     if ext.lower() == '.gpx':
-        return f"{base}.pdf"
-    return f"{gpx_path}.pdf"
+        return f"{base}{suffix}.pdf"
+    return f"{gpx_path}{suffix}.pdf"
 
 
 def export_results_pdf(output_path, rows, title, chart_rows=None, summary=None):
@@ -598,7 +613,7 @@ def mode_power(args):
         print(line)
 
     if args.gpx:
-        output_path = build_pdf_output_path(args.gpx)
+        output_path = build_pdf_output_path(args.gpx, mode=args.mode if getattr(args, 'batch_mode', False) else None)
         output_dir = os.path.dirname(output_path) or '.'
         os.makedirs(output_dir, exist_ok=True)
         try:
@@ -689,7 +704,7 @@ def mode_speed(args):
         print(line)
 
     if args.gpx:
-        output_path = build_pdf_output_path(args.gpx)
+        output_path = build_pdf_output_path(args.gpx, mode=args.mode if getattr(args, 'batch_mode', False) else None)
         output_dir = os.path.dirname(output_path) or '.'
         os.makedirs(output_dir, exist_ok=True)
         try:
@@ -733,7 +748,8 @@ def mode_speed(args):
 def main():
     parser = argparse.ArgumentParser(description="Calcule puissance ou vitesse a partir d'un fichier GPX.")
     parser.add_argument('mode', nargs='?', choices=['power', 'speed'], help="power : calcule la puissance ; speed : calcule la vitesse")
-    parser.add_argument('--gpx', help="Chemin du fichier GPX")
+    parser.add_argument('--gpx', help="Chemin du fichier GPX ou du dossier contenant les GPX")
+    parser.add_argument('--all', action='store_true', help="Traite tous les fichiers GPX d'un dossier (power et/ou speed selon le mode choisi)")
     parser.add_argument('--cyclist', type=float, help="Poids du cycliste (kg)")
     parser.add_argument('--bike', type=float, default=9.0, help="Poids du velo (kg)")
     parser.add_argument('--accessories', type=float, default=3.0, help="Poids des accessoires (kg)")
@@ -753,6 +769,24 @@ def main():
     args.cogs = args.cogs or [11, 12, 13, 14, 15, 17, 19, 21, 23, 26]
     args.rpm_range = tuple(args.rpm_range) if args.rpm_range else (60.0, 80.0)
     args.max_cog = args.max_cog
+
+    if args.all:
+        gpx_files = iter_gpx_files(args.gpx if args.gpx else '.')
+        if not gpx_files:
+            parser.error("Aucun fichier GPX trouve dans le dossier donne")
+
+        modes = [args.mode] if args.mode else ['power', 'speed']
+        for gpx_file in gpx_files:
+            for selected_mode in modes:
+                batch_args = argparse.Namespace(**vars(args))
+                batch_args.gpx = gpx_file
+                batch_args.mode = selected_mode
+                batch_args.batch_mode = True
+                if selected_mode == 'power':
+                    mode_power(batch_args)
+                else:
+                    mode_speed(batch_args)
+        return
 
     if not args.mode:
         parser.print_help()

@@ -161,6 +161,10 @@ class BuildSegmentGroupsTests(unittest.TestCase):
         self.assertEqual(build_pdf_output_path('/tmp/example.gpx'), '/tmp/example.pdf')
         self.assertEqual(build_pdf_output_path('/tmp/example.GPX'), '/tmp/example.pdf')
 
+    def test_pdf_output_path_appends_mode_name_when_requested(self):
+        self.assertEqual(build_pdf_output_path('/tmp/example.gpx', mode='power'), '/tmp/example (power).pdf')
+        self.assertEqual(build_pdf_output_path('/tmp/example.gpx', mode='speed'), '/tmp/example (speed).pdf')
+
     def test_recommend_gear_prefers_cadence_in_range(self):
         recommendation = recommend_gear(
             speed_mps=10.0,
