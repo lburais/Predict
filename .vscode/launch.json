@@ -55,7 +55,7 @@
             "console": "integratedTerminal",
             "args": [
                 "speed",
-                "--gpx", "08aug26.gpx",
+                "--gpx", "data/22aug26.gpx",
                 "--cyclist", "90",
                 "--power", "185",
             ]

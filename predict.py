@@ -757,7 +757,7 @@ def main():
     parser.add_argument('--group-distance', type=float, default=100.0, help="Distance cible (m) pour regrouper les segments")
     parser.add_argument('--min-slope', type=float, default=-0.5, help="Pente minimale (%%) pour inclure un groupe dans la moyenne")
     parser.add_argument('--chainrings', nargs='+', type=int, default=[50, 34], help="Liste des plateaux disponibles")
-    parser.add_argument('--cogs', nargs='+', type=int, default=[11, 12, 13, 14, 15, 17, 19, 21, 23, 26], help="Liste des pignons disponibles")
+    parser.add_argument('--cogs', nargs='+', type=int, default=[13, 14, 15, 17, 19, 21, 23, 25, 27, 29], help="Liste des pignons disponibles")
     parser.add_argument('--rpm-range', nargs=2, type=float, default=[60.0, 80.0], help="Plage de cadence desiree (rpm min max)")
     parser.add_argument('--max-cog', type=int, default=None, help="Pignon maximum autorise avec le plus grand plateau")
     parser.add_argument('--scx', type=float, default=0.40, help="Coefficient aerodynamique SCx (defaut 0.40)")
