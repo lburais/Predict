@@ -17,8 +17,11 @@
             "request": "launch",
             "program": "predict.py",
             "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
-                "power",
+                "--all",
+                "--gpx", "data",
+                "--power", "200",
                 "--cyclist", "90",
             ]
         },
@@ -28,6 +31,7 @@
             "request": "launch",
             "program": "predict.py",
             "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "power",
                 "--gpx", "sortie.gpx",
@@ -41,9 +45,10 @@
             "request": "launch",
             "program": "predict.py",
             "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "power",
-                "--gpx", "12aug26s.gpx",
+                "--gpx", "data/12aug26s.gpx",
                 "--cyclist", "90",
             ]
         },
@@ -53,6 +58,7 @@
             "request": "launch",
             "program": "predict.py",
             "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "speed",
                 "--gpx", "data/22aug26.gpx",

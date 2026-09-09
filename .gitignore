@@ -2,3 +2,5 @@
 *.gpx
 *.pdf
 __pycache__/
+.venv/
+data/

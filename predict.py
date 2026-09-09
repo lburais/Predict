@@ -583,7 +583,9 @@ def mode_power(args):
         n += 1
 
     if n == 0:
-        sys.exit("Erreur : aucun horodatage (balise <time>) exploitable dans ce GPX pour le mode 'power'.")
+        # sys.exit("Erreur : aucun horodatage (balise <time>) exploitable dans ce GPX pour le mode 'power'.")
+        print(f"\nErreur : aucun horodatage (balise <time>) exploitable dans ce GPX pour le mode 'power'.")
+        return
 
     total_mass = total_weight(args.cyclist, bike=args.bike, accessories=args.accessories)
     average_power = compute_weighted_average_power(
