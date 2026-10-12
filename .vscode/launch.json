@@ -48,7 +48,8 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "power",
-                "--gpx", "data/12aug26s.gpx",
+                "--group-distance", "10",
+                "--gpx", "data/Col_de_Vence.gpx",
                 "--cyclist", "90",
             ]
         },
